@@ -1,0 +1,12 @@
+[package]
+name = "transaction"
+version = "0.1.0"
+authors = ["Sachin Beniwal <sachinbeniwal0101@gmail.com>"]
+edition = "2021"
+
+[lib]
+name = "transaction"
+crate-type = ["cdylib"]
+
+[dependencies]
+rustler = "0.36.0"
