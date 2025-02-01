@@ -9,4 +9,10 @@ name = "transaction"
 crate-type = ["cdylib"]
 
 [dependencies]
+config = "0.15.7"
 rustler = "0.36.0"
+serde = { version = "1.0.217", features = ["derive"] }
+solana-client = "2.1.11"
+solana-program = "2.1.11"
+solana-sdk = "2.1.11"
+tracing = "0.1.41"
