@@ -25,3 +25,7 @@ transaction-*.tar
 target/
 
 priv/
+
+test-ledger
+
+wallet.json

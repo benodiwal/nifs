@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct Settings {
-    rpc_client: String,
+    rpc_client_url: String,
 }
 
 pub fn get_configurations() -> Result<Settings, config::ConfigError> {
@@ -15,6 +15,6 @@ pub fn get_configurations() -> Result<Settings, config::ConfigError> {
 
 impl Settings {
     pub fn get_rpc_client(&self) -> String {
-        self.rpc_client.clone()
+        self.rpc_client_url.clone()
     }
 }
