@@ -24,6 +24,19 @@ impl Core {
     ) -> Result<String, Error> {
         debug!("Creating new transaction");
 
+        let rpc_client = RpcClient::new(self.rpc_client_url.clone());
+
+        let recent_blockhash = match rpc_client.get_latest_blockhash() {
+            Ok(blockhash) => {
+                debug!("Got recent blockhash");
+                blockhash
+            }
+            Err(e) => {
+                error!("Failed to get recent blockhash: {}", e);
+                return Err(Error::Term(Box::new("Failed to get recent blockhash")));
+            }
+        };
+
         let sender_pubkey = match Pubkey::try_from(sender.as_str()) {
             Ok(pubkey) => {
                 debug!("Sender public key parsed successfully");
@@ -49,7 +62,8 @@ impl Core {
         let instruction = system_instruction::transfer(&sender_pubkey, &recipient_pubkey, amount);
         debug!("Transfer instruction created");
 
-        let message = Message::new(&[instruction], Some(&sender_pubkey));
+        let message =
+            Message::new_with_blockhash(&[instruction], Some(&sender_pubkey), &recent_blockhash);
         let transaction = Transaction::new_unsigned(message);
 
         match bincode::serialize(&transaction) {
@@ -86,18 +100,9 @@ impl Core {
             }
         };
 
-        let keypair_bytes = self.hex_to_bytes(&private_key, "private key")?;
+        // let keypair_bytes = self.hex_to_bytes(&private_key, "private key")?;
 
-        let keypair = match Keypair::from_bytes(&keypair_bytes) {
-            Ok(kp) => {
-                debug!("Keypair created successfully");
-                kp
-            }
-            Err(e) => {
-                error!("Failed to create keypair: {}", e);
-                return Err(Error::Term(Box::new("Invalid keypair")));
-            }
-        };
+        let keypair = Keypair::from_base58_string(&private_key);
 
         transaction.sign(&[&keypair], transaction.message.recent_blockhash);
         debug!("Transaction signed successfully");
