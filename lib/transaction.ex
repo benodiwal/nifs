@@ -69,21 +69,4 @@ defmodule Transaction do
   def make_transaction(_sender, _recipient, _amount, _private_key_hex) do
     :erlang.nif_error(:nif_not_loaded)
   end
-
-  @doc """
-  A simple hello world function for testing.
-
-  ## Returns
-
-    * `:world`
-
-  ## Examples
-
-      iex> Transaction.hello()
-      :world
-  """
-  @spec hello() :: :world
-  def hello do
-    :world
-  end
 end
