@@ -17,4 +17,8 @@ solana-client = "2.1.11"
 solana-program = "2.1.11"
 solana-sdk = "2.1.11"
 tracing = "0.1.41"
-tracing-subscriber = "0.3.19"
+tracing-subscriber = { version = "0.3.19", features = [
+    "json",
+    "chrono",
+    "env-filter",
+] }

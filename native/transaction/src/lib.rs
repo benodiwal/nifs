@@ -1,9 +1,15 @@
-use rustler::NifResult;
+use rustler::{Env, NifResult, Term};
 use tracing::{debug, error, info, instrument};
 mod config;
 mod core;
+mod subscriber;
 
 use core::Core;
+
+fn load(_env: Env, _term: Term) -> bool {
+    subscriber::init();
+    true
+}
 
 #[rustler::nif]
 #[instrument]
@@ -92,4 +98,4 @@ fn make_transaction(
     }
 }
 
-rustler::init!("Elixir.Transaction");
+rustler::init!("Elixir.Transaction", load = load);
