@@ -59,9 +59,3 @@ iex> Demo.run(sender, recipient, amount)   # Run demo
    ```bash
    solana airdrop 1 $(solana-keygen pubkey wallet.json) --url https://api.devnet.solana.com
    ```
-
-## 🔐 Security Notes
-
-- Keep your `wallet.json` secure and never commit it to version control
-- Use environment variables or secure secrets management in production
-- The demo uses devnet by default; switch to mainnet for real transactions
