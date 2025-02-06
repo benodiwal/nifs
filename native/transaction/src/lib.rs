@@ -98,4 +98,38 @@ fn make_transaction(
     }
 }
 
+#[rustler::nif]
+#[instrument(skip(creator_key))]
+fn mint_nft(creator_key: String, name: String, symbol: String, uri: String) -> NifResult<String> {
+    info!("Starting NFT minting process");
+    debug!(
+        "NFT parameters: name={}, symbol={}, uri={}",
+        name, symbol, uri
+    );
+
+    let settings = match config::get_configurations() {
+        Ok(s) => {
+            debug!("Configuration loaded successfully");
+            s
+        }
+        Err(e) => {
+            error!("Failed to load configuration: {}", e);
+            return Err(rustler::Error::Term(Box::new(e.to_string())));
+        }
+    };
+
+    let core = Core::new(settings.get_rpc_client());
+
+    match core.mint_nft(creator_key, name, symbol, uri) {
+        Ok(signature) => {
+            info!("NFT minted successfully with signature: {}", signature);
+            Ok(signature)
+        }
+        Err(e) => {
+            error!("Failed to mint NFT: {:?}", e);
+            Err(e)
+        }
+    }
+}
+
 rustler::init!("Elixir.Transaction", load = load);

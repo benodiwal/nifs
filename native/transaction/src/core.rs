@@ -1,9 +1,11 @@
+use mpl_token_metadata::{instructions::CreateMetadataAccountV3, types::DataV2};
 use rustler::Error;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    message::Message, pubkey::Pubkey, signature::Keypair, system_instruction,
-    transaction::Transaction,
+    message::Message, program_pack::Pack, pubkey::Pubkey, signature::Keypair, signer::Signer,
+    system_instruction, system_program, sysvar, transaction::Transaction,
 };
+use spl_token::{instruction as token_instruction, state::Mint};
 use tracing::{debug, error, info};
 
 pub struct Core {
@@ -100,8 +102,6 @@ impl Core {
             }
         };
 
-        // let keypair_bytes = self.hex_to_bytes(&private_key, "private key")?;
-
         let keypair = Keypair::from_base58_string(&private_key);
 
         transaction.sign(&[&keypair], transaction.message.recent_blockhash);
@@ -168,5 +168,120 @@ impl Core {
 
         debug!("Hex string converted to bytes successfully");
         Ok(bytes)
+    }
+
+    pub fn mint_nft(
+        &self,
+        creator_key: String,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> Result<String, Error> {
+        debug!("Starting NFT minting process");
+
+        let rpc_client = RpcClient::new(self.rpc_client_url.clone());
+        let creator = Keypair::from_base58_string(&creator_key);
+        let mint = Keypair::new();
+        let mint_pubkey = mint.pubkey();
+
+        let seeds = &[
+            b"metadata",
+            mpl_token_metadata::ID.as_ref(),
+            mint_pubkey.as_ref(),
+        ];
+        let (metadata_account, _) = Pubkey::find_program_address(seeds, &mpl_token_metadata::ID);
+
+        let recent_blockhash = match rpc_client.get_latest_blockhash() {
+            Ok(blockhash) => {
+                debug!("Got recent blockhash");
+                blockhash
+            }
+            Err(e) => {
+                error!("Failed to get recent blockhash: {}", e);
+                return Err(Error::Term(Box::new("Failed to get recent blockhash")));
+            }
+        };
+
+        let mint_rent =
+            match rpc_client.get_minimum_balance_for_rent_exemption(spl_token::state::Mint::LEN) {
+                Ok(rent) => {
+                    debug!("Got mint rent");
+                    rent
+                }
+                Err(e) => {
+                    error!("Failed to get mint rent: {}", e);
+                    return Err(Error::Term(Box::new("Failed to get mint rent")));
+                }
+            };
+
+        let create_mint_ix = system_instruction::create_account(
+            &creator.pubkey(),
+            &mint.pubkey(),
+            mint_rent,
+            Mint::LEN as u64,
+            &spl_token::id(),
+        );
+
+        let init_mint_ix = match token_instruction::initialize_mint(
+            &spl_token::id(),
+            &mint.pubkey(),
+            &creator.pubkey(),
+            None,
+            0,
+        ) {
+            Ok(ix) => {
+                debug!("Initialized mint");
+                ix
+            }
+            Err(e) => {
+                error!("Failed to initialize mint: {}", e);
+                return Err(Error::Term(Box::new("Failed to initialize mint")));
+            }
+        };
+
+        let metadata_ix = CreateMetadataAccountV3 {
+            metadata: metadata_account,
+            mint: mint.pubkey(),
+            mint_authority: creator.pubkey(),
+            payer: creator.pubkey(),
+            update_authority: (creator.pubkey(), true),
+            system_program: system_program::id(),
+            rent: Some(sysvar::rent::id()),
+        };
+        let metadata_ix_instruction = metadata_ix.instruction(
+            mpl_token_metadata::instructions::CreateMetadataAccountV3InstructionArgs {
+                data: DataV2 {
+                    name,
+                    symbol,
+                    uri,
+                    seller_fee_basis_points: 0,
+                    creators: None,
+                    collection: None,
+                    uses: None,
+                },
+                is_mutable: true,
+                collection_details: None,
+            },
+        );
+
+        let transaction = Transaction::new_signed_with_payer(
+            &[create_mint_ix, init_mint_ix, metadata_ix_instruction],
+            Some(&creator.pubkey()),
+            &[&creator, &mint],
+            recent_blockhash,
+        );
+
+        let signature = match rpc_client.send_and_confirm_transaction(&transaction) {
+            Ok(signature) => {
+                info!("NFT minted successfully with signature: {}", signature);
+                signature
+            }
+            Err(e) => {
+                error!("Failed to mint NFT: {}", e);
+                return Err(Error::Term(Box::new("Failed to mint NFT")));
+            }
+        };
+
+        Ok(signature.to_string())
     }
 }

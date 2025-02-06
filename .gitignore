@@ -29,3 +29,5 @@ priv/
 test-ledger
 
 wallet.json
+
+metadata.json
