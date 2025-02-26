@@ -1,7 +1,3 @@
-# Solana Transaction NIFs
-
-Making Solana transactions using Elixir through `Rustler Bridge` using NIFs.
-
 ## 🚀 Quick Start
 
 ### 1. Configuration
@@ -35,10 +31,18 @@ solana airdrop 1 $(solana-keygen pubkey wallet.json) --url https://api.devnet.so
 iex -S mix
 
 # In the IEx shell:
-iex> Demo.help()    # Show usage guide
-iex> Demo.run(sender, recipient, amount)   # Run demo
+# Check connection and configuration
+iex> Demo.check_connection()
+iex> Demo.show_config()
 
-## Sender, Recipient are PubKeys
+# Get help
+iex> Demo.help()
+
+# Regular Transaction Demo
+iex> Demo.run_transaction(sender, recipient, amount)
+
+# NFT Minting Demo
+iex> Demo.run_mint_nft(creator_key, "My NFT", "MNFT", "https://example.com/metadata.json")
 ```
 
 ## 💻 Development Setup
