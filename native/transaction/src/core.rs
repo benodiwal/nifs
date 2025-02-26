@@ -1,21 +1,20 @@
+use std::str::FromStr;
+
 use mpl_token_metadata::{instructions::CreateMetadataAccountV3, types::DataV2};
 use rustler::Error;
-use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    message::Message, program_pack::Pack, pubkey::Pubkey, signature::Keypair, signer::Signer,
-    system_instruction, system_program, sysvar, transaction::Transaction,
+    hash::Hash, message::Message, program_pack::Pack, pubkey::Pubkey, signature::Keypair,
+    signer::Signer, system_instruction, system_program, sysvar, transaction::Transaction,
 };
 use spl_token::{instruction as token_instruction, state::Mint};
 use tracing::{debug, error, info};
 
-pub struct Core {
-    pub rpc_client_url: String,
-}
+pub struct Core {}
 
 impl Core {
-    pub fn new(rpc_client_url: String) -> Self {
-        info!("Initializing Core with RPC URL: {}", rpc_client_url);
-        Core { rpc_client_url }
+    pub fn new() -> Self {
+        info!("Initializing Core");
+        Core {}
     }
 
     pub fn create_transaction(
@@ -23,21 +22,22 @@ impl Core {
         sender: String,
         recipient: String,
         amount: u64,
+        recent_blockhash: String,
     ) -> Result<String, Error> {
         debug!("Creating new transaction");
 
-        let rpc_client = RpcClient::new(self.rpc_client_url.clone());
+        // let rpc_client = RpcClient::new(self.rpc_client_url.clone());
 
-        let recent_blockhash = match rpc_client.get_latest_blockhash() {
-            Ok(blockhash) => {
-                debug!("Got recent blockhash");
-                blockhash
-            }
-            Err(e) => {
-                error!("Failed to get recent blockhash: {}", e);
-                return Err(Error::Term(Box::new("Failed to get recent blockhash")));
-            }
-        };
+        // let recent_blockhash = match rpc_client.get_latest_blockhash() {
+        //     Ok(blockhash) => {
+        //         debug!("Got recent blockhash");
+        //         blockhash
+        //     }
+        //     Err(e) => {
+        //         error!("Failed to get recent blockhash: {}", e);
+        //         return Err(Error::Term(Box::new("Failed to get recent blockhash")));
+        //     }
+        // };
 
         let sender_pubkey = match Pubkey::try_from(sender.as_str()) {
             Ok(pubkey) => {
@@ -61,11 +61,18 @@ impl Core {
             }
         };
 
+        let blockhash = match Hash::from_str(&recent_blockhash) {
+            Ok(hash) => hash,
+            Err(e) => {
+                error!("Failed to parse blockhash: {}", e);
+                return Err(Error::Term(Box::new("Invalid blockhash")));
+            }
+        };
+
         let instruction = system_instruction::transfer(&sender_pubkey, &recipient_pubkey, amount);
         debug!("Transfer instruction created");
 
-        let message =
-            Message::new_with_blockhash(&[instruction], Some(&sender_pubkey), &recent_blockhash);
+        let message = Message::new_with_blockhash(&[instruction], Some(&sender_pubkey), &blockhash);
         let transaction = Transaction::new_unsigned(message);
 
         match bincode::serialize(&transaction) {
@@ -122,37 +129,37 @@ impl Core {
         }
     }
 
-    pub fn send_transaction(&self, signed_transaction_hex: String) -> Result<String, Error> {
-        debug!("Initializing RPC client with URL: {}", self.rpc_client_url);
-        let rpc_client = RpcClient::new(self.rpc_client_url.clone());
+    // pub fn send_transaction(&self, signed_transaction_hex: String) -> Result<String, Error> {
+    //     debug!("Initializing RPC client with URL: {}", self.rpc_client_url);
+    //     let rpc_client = RpcClient::new(self.rpc_client_url.clone());
 
-        let transaction_bytes = self.hex_to_bytes(&signed_transaction_hex, "signed transaction")?;
+    //     let transaction_bytes = self.hex_to_bytes(&signed_transaction_hex, "signed transaction")?;
 
-        let transaction: Transaction = match bincode::deserialize(&transaction_bytes) {
-            Ok(tx) => {
-                debug!("Signed transaction deserialized successfully");
-                tx
-            }
-            Err(e) => {
-                error!("Failed to deserialize signed transaction: {}", e);
-                return Err(Error::Term(Box::new("Failed to deserialize transaction")));
-            }
-        };
+    //     let transaction: Transaction = match bincode::deserialize(&transaction_bytes) {
+    //         Ok(tx) => {
+    //             debug!("Signed transaction deserialized successfully");
+    //             tx
+    //         }
+    //         Err(e) => {
+    //             error!("Failed to deserialize signed transaction: {}", e);
+    //             return Err(Error::Term(Box::new("Failed to deserialize transaction")));
+    //         }
+    //     };
 
-        match rpc_client.send_transaction(&transaction) {
-            Ok(signature) => {
-                info!(
-                    "Transaction sent successfully with signature: {}",
-                    signature
-                );
-                Ok(signature.to_string())
-            }
-            Err(e) => {
-                error!("Failed to send transaction: {}", e);
-                Err(Error::Term(Box::new("Failed to send transaction")))
-            }
-        }
-    }
+    //     match rpc_client.send_transaction(&transaction) {
+    //         Ok(signature) => {
+    //             info!(
+    //                 "Transaction sent successfully with signature: {}",
+    //                 signature
+    //             );
+    //             Ok(signature.to_string())
+    //         }
+    //         Err(e) => {
+    //             error!("Failed to send transaction: {}", e);
+    //             Err(Error::Term(Box::new("Failed to send transaction")))
+    //         }
+    //     }
+    // }
 
     fn hex_to_bytes(&self, hex_str: &str, context: &str) -> Result<Vec<u8>, Error> {
         let bytes = hex_str
@@ -170,16 +177,17 @@ impl Core {
         Ok(bytes)
     }
 
-    pub fn mint_nft(
+    pub fn create_mint_nft_transaction(
         &self,
         creator_key: String,
         name: String,
         symbol: String,
         uri: String,
+        recent_blockhash: String,
+        mint_rent: u64,
     ) -> Result<String, Error> {
         debug!("Starting NFT minting process");
 
-        let rpc_client = RpcClient::new(self.rpc_client_url.clone());
         let creator = Keypair::from_base58_string(&creator_key);
         let mint = Keypair::new();
         let mint_pubkey = mint.pubkey();
@@ -191,28 +199,25 @@ impl Core {
         ];
         let (metadata_account, _) = Pubkey::find_program_address(seeds, &mpl_token_metadata::ID);
 
-        let recent_blockhash = match rpc_client.get_latest_blockhash() {
-            Ok(blockhash) => {
-                debug!("Got recent blockhash");
-                blockhash
-            }
+        let recent_blockhash = match Hash::from_str(&recent_blockhash) {
+            Ok(hash) => hash,
             Err(e) => {
-                error!("Failed to get recent blockhash: {}", e);
-                return Err(Error::Term(Box::new("Failed to get recent blockhash")));
+                error!("Failed to parse recent blockhash: {}", e);
+                return Err(Error::Term(Box::new("Failed to parse recent blockhash")));
             }
         };
 
-        let mint_rent =
-            match rpc_client.get_minimum_balance_for_rent_exemption(spl_token::state::Mint::LEN) {
-                Ok(rent) => {
-                    debug!("Got mint rent");
-                    rent
-                }
-                Err(e) => {
-                    error!("Failed to get mint rent: {}", e);
-                    return Err(Error::Term(Box::new("Failed to get mint rent")));
-                }
-            };
+        // let mint_rent =
+        //     match rpc_client.get_minimum_balance_for_rent_exemption(spl_token::state::Mint::LEN) {
+        //         Ok(rent) => {
+        //             debug!("Got mint rent");
+        //             rent
+        //         }
+        //         Err(e) => {
+        //             error!("Failed to get mint rent: {}", e);
+        //             return Err(Error::Term(Box::new("Failed to get mint rent")));
+        //         }
+        //     };
 
         let create_mint_ix = system_instruction::create_account(
             &creator.pubkey(),
@@ -271,17 +276,27 @@ impl Core {
             recent_blockhash,
         );
 
-        let signature = match rpc_client.send_and_confirm_transaction(&transaction) {
-            Ok(signature) => {
-                info!("NFT minted successfully with signature: {}", signature);
-                signature
+        // let signature = match rpc_client.send_and_confirm_transaction(&transaction) {
+        //     Ok(signature) => {
+        //         info!("NFT minted successfully with signature: {}", signature);
+        //         signature
+        //     }
+        //     Err(e) => {
+        //         error!("Failed to mint NFT: {}", e);
+        //         return Err(Error::Term(Box::new("Failed to mint NFT")));
+        //     }
+        // };
+
+        match bincode::serialize(&transaction) {
+            Ok(bytes) => {
+                let hex = bytes.iter().map(|b| format!("{:02x}", b)).collect();
+                info!("NFT transaction created successfully");
+                Ok(hex)
             }
             Err(e) => {
-                error!("Failed to mint NFT: {}", e);
-                return Err(Error::Term(Box::new("Failed to mint NFT")));
+                error!("Failed to serialize NFT transaction: {}", e);
+                Err(Error::Term(Box::new("Failed to serialize NFT transaction")))
             }
-        };
-
-        Ok(signature.to_string())
+        }
     }
 }
